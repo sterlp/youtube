@@ -3,6 +3,8 @@ package org.sterl.db_grundlagen;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -20,15 +22,15 @@ class DbGrundlagenApplicationTests {
 
     @Autowired AccountService accountService;
     @Autowired AccountRepository accountRepository;
-
-    private ExecutorService executor = Executors.newFixedThreadPool(10);
+    private final static int THREAD_COUNT = 100;
+    private ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT);
     
     @AfterEach
     void clean() throws InterruptedException {
         synchronized(executor) {
             executor.shutdown();
             executor.awaitTermination(60, TimeUnit.SECONDS);
-            executor = Executors.newFixedThreadPool(10);
+            executor = Executors.newFixedThreadPool(THREAD_COUNT);
         }
         accountRepository.deleteAllInBatch();
     }
@@ -38,31 +40,41 @@ class DbGrundlagenApplicationTests {
         // GIVEN
         accountService.save(new AccountEntity("a", 0));
 
-        // WHEN
-        updateAccountAsync("a", 8);
-        updateAccountAsync("a", -10);
-        updateAccountAsync("a", 3);
+        // WHEN - sleep is 500ms, TRX timeout is 5s 
+        // => less than ~10 concurrent threads possible!!!
+        final var measure = new TimeMeasure();
+        for(int clients = 1; clients < 10; ++clients) updateAccountAsync("a", clients);
         
         // THEN
         executor.shutdown();
         executor.awaitTermination(60, TimeUnit.SECONDS);
+        Duration runtime = measure.stop();
         // AND
+        TimeMeasure.print("Update Accounts", runtime);
         assertThat(accountService.get("a").get().getBalance()).isEqualTo(1);
     }
     
     private void updateAccountAsync(String id, int ammount) {
         executor.submit(() -> {
+            final var measure = new TimeMeasure();
             try {
                 accountService.updateAccount(id, ammount);
+                Duration duration = measure.stop();
+                System.err.println(Instant.now() + ": Updated id=" + id 
+                        + " by="+ ammount
+                        + " in=" + duration.toMillis() + "ms");
             } catch (Exception e) {
+                Duration duration = measure.stop();
                 System.err.println("\n----\n"
-                                 + "Failed to update id=" + id + " with ammount=" + ammount
+                                 + "Failed to update id=" + id 
+                                 + " by=" + ammount
+                                 + " in=" + duration.toMillis() + "ms"
                                  + "\n" + e.getMessage()
                                  + "\n----");
             }
         });
     }
-    
+
     @Test
     void read() {
         accountService.listAll().forEach(System.out::println);
