@@ -43,7 +43,7 @@ class DbGrundlagenApplicationTests {
         // WHEN - sleep is 500ms, TRX timeout is 5s / query timeout 4.5s
         // => less than ~10 concurrent threads possible!!!
         final var measure = new TimeMeasure();
-        for(int clients = 1; clients < 10; ++clients) updateAccountAsync("a", 1);
+        for(int clients = 1; clients <= 10; ++clients) updateAccountAsync("a", 1);
         
         // THEN
         executor.shutdown();
@@ -51,7 +51,7 @@ class DbGrundlagenApplicationTests {
         Duration runtime = measure.stop();
         // AND
         TimeMeasure.print("Update Accounts", runtime);
-        assertThat(accountService.get("a").get().getBalance()).isEqualTo(9);
+        assertThat(accountService.get("a").get().getBalance()).isEqualTo(10);
     }
     
     private void updateAccountAsync(String id, int ammount) {
@@ -66,7 +66,7 @@ class DbGrundlagenApplicationTests {
             } catch (Exception e) {
                 Duration duration = measure.stop();
                 System.err.println("\n----\n"
-                                 + "Failed to update id=" + id 
+                                 + Instant.now() + ": Failed to update id=" + id 
                                  + " by=" + ammount
                                  + " in=" + duration.toMillis() + "ms"
                                  + "\n" + e.getMessage()

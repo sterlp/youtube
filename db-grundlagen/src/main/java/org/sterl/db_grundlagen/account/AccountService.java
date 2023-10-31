@@ -1,12 +1,14 @@
 package org.sterl.db_grundlagen.account;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 
@@ -32,15 +34,17 @@ public class AccountService {
     }
 
     public AccountEntity updateAccount(String id, int ammount) {
+        /* same as but not quite due - different exception handling
         var result = accountRepository.findLocked(id).get(); 
-        /* same as
+         */
         var result = entityManager.find(AccountEntity.class, id, LockModeType.PESSIMISTIC_WRITE, 
                 Map.of("jakarta.persistence.lock.timeout", 4500,
                        "jakarta.persistence.query.timeout", 4500));
-                       */
-                       
 
         result.add(ammount);
+        // ensure we hold the lock during the sleep, 
+        // only required if the sleep around 250ms
+        entityManager.flush(); 
         sleep(500);
 
         return result;
@@ -49,6 +53,8 @@ public class AccountService {
     private void sleep(int time) {
         try {
             Thread.sleep(time);
-        } catch (InterruptedException e) {}
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
