@@ -39,11 +39,13 @@ class DbGrundlagenApplicationTests {
     void updateConcurrentUpdate() throws IOException, InterruptedException {
         // GIVEN
         accountService.save(new AccountEntity("a", 0));
-
-        // WHEN - sleep is 500ms, TRX timeout is 5s / query timeout 4.5s
-        // => less than ~5 concurrent threads possible!!!
+        // AND sleep is 500ms, TRX timeout is 5s / query timeout 4.5s
+        // => around ~8 concurrent threads possible!!!
+        final var clientCount = 8;
+        
+        // WHEN we run concurrent updates
         final var measure = new TimeMeasure();
-        for(int clients = 1; clients <= 7; ++clients) updateAccountAsync("a", 1);
+        for(int clients = 1; clients <= clientCount; ++clients) updateAccountAsync("a", 1);
         
         // THEN
         executor.shutdown();
@@ -51,7 +53,7 @@ class DbGrundlagenApplicationTests {
         Duration runtime = measure.stop();
         // AND
         TimeMeasure.print("Update Accounts", runtime);
-        assertThat(accountService.get("a").get().getBalance()).isEqualTo(7);
+        assertThat(accountService.get("a").get().getBalance()).isEqualTo(clientCount);
     }
     
     private void updateAccountAsync(String id, int ammount) {
