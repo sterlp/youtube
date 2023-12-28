@@ -2,6 +2,8 @@ package org.sterl.db_grundlagen.account;
 
 import java.util.Optional;
 
+import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.jpa.SpecHints;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -13,9 +15,10 @@ import jakarta.persistence.QueryHint;
 public interface AccountRepository extends JpaRepository<AccountEntity, String> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    // https://jakarta.ee/specifications/persistence/3.0/jakarta-persistence-spec-3.0.html#a2132
     @QueryHints({
-        @QueryHint(name = "jakarta.persistence.lock.timeout", value = "4500"),
-        @QueryHint(name = "jakarta.persistence.query.timeout", value = "4500")
+        @QueryHint(name = AvailableSettings.JAKARTA_LOCK_TIMEOUT, value = "4500"),
+        @QueryHint(name = SpecHints.HINT_SPEC_QUERY_TIMEOUT, value = "4500")
     })
     @Query("SELECT e FROM AccountEntity e WHERE e.id = :id")
     Optional<AccountEntity> findLocked(String id);
