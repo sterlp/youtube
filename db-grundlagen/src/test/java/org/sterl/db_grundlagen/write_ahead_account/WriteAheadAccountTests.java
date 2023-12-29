@@ -1,4 +1,4 @@
-package org.sterl.db_grundlagen;
+package org.sterl.db_grundlagen.write_ahead_account;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -13,15 +13,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.sterl.db_grundlagen.account.AccountEntity;
-import org.sterl.db_grundlagen.account.AccountRepository;
-import org.sterl.db_grundlagen.account.AccountService;
+import org.sterl.db_grundlagen.TimeMeasure;
 
 @SpringBootTest
-class DbGrundlagenApplicationTests {
+class WriteAheadAccountTests {
 
-    @Autowired AccountService accountService;
-    @Autowired AccountRepository accountRepository;
+    @Autowired WriteAheadAccountService accountService;
+    @Autowired WriteAheadAccountRepository accountRepository;
+
     private final static int THREAD_COUNT = 100;
     private ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT);
 
@@ -38,10 +37,9 @@ class DbGrundlagenApplicationTests {
     @Test
     void concurrentAccountUpdateTest() throws IOException, InterruptedException {
         // GIVEN
-        accountService.save(new AccountEntity("a", 0));
+        accountService.save(new WriteAheadAccountEntity("a", 0));
         // AND sleep is 500ms, TRX timeout is 5s / query timeout 4.5s
-        // => around ~8 concurrent threads possible!!!
-        final var clientCount = 10;
+        final var clientCount = 20;
         
         // WHEN we run concurrent updates
         final var measure = new TimeMeasure();
@@ -53,9 +51,9 @@ class DbGrundlagenApplicationTests {
         Duration runtime = measure.stop();
         // AND
         TimeMeasure.print("Update Accounts", runtime);
-        assertThat(accountService.get("a").get().getBalance()).isEqualTo(clientCount);
+        assertThat(accountService.sumAccount("a")).isEqualTo(clientCount);
     }
-    
+
     private void updateAccountAsync(String id, int ammount) {
         executor.submit(() -> {
             final var measure = new TimeMeasure();
