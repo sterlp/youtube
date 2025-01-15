@@ -9,10 +9,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.sterl.db_grundlagen.transaction.repository.PersonRepository;
 
 @SpringBootTest
-class TransactionServiceTest {
-
+class PersonServiceTest {
     @Autowired
-    private TransactionService subject;
+    private PersonService subject;
     @Autowired
     private PersonRepository personRepository;
 
@@ -35,11 +34,9 @@ class TransactionServiceTest {
         personRepository.deleteAllInBatch();
         
         // WHEN
-        
         assertThrows(RuntimeException.class, () -> subject.create(""));
         
         // THEN
         assertThat(personRepository.count()).isZero();
     }
-
 }

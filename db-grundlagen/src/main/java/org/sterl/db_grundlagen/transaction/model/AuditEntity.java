@@ -9,19 +9,19 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-@Table(name = "PERSON")
+@Table(name = "AUDIT")
 @Entity
 @Data
 @EqualsAndHashCode(of = "id")
 @NoArgsConstructor
-public class PersonEntity {
+public class AuditEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE)
     private Long id;
     private String name;
 
-    public PersonEntity(String name) {
+    public AuditEntity(String name) {
         super();
         this.name = name;
     }

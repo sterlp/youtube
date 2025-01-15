@@ -8,15 +8,21 @@ import org.sterl.db_grundlagen.transaction.model.PersonEntity;
 import lombok.RequiredArgsConstructor;
 
 @Service
-@Transactional
 @RequiredArgsConstructor
-public class TransactionService {
+public class PersonService {
 
     private final CreatePersonComponent createPerson;
+    private final AuditService auditService;
     
-    @Transactional(readOnly = true, timeout = 10)
+    @Transactional
     public PersonEntity create(String name) {
         var result = new PersonEntity(name);
-        return createPerson.execute(result);
+
+        auditService.newAuditEvent("Person with name " + name + " created!");
+        
+        result = createPerson.execute(result);
+
+        return result;
     }
 }
+

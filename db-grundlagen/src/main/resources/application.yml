@@ -4,7 +4,7 @@ spring:
     username: postgres
     password: pass
     hikari:
-      maximum-pool-size: 20
+      maximum-pool-size: 1
   jpa:
     hibernate:
       ddl-auto: update
