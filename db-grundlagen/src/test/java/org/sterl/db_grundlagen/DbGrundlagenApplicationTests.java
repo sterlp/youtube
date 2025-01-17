@@ -13,9 +13,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.sterl.db_grundlagen.account.AccountEntity;
-import org.sterl.db_grundlagen.account.AccountRepository;
 import org.sterl.db_grundlagen.account.AccountService;
+import org.sterl.db_grundlagen.account.model.AccountEntity;
+import org.sterl.db_grundlagen.account.repository.AccountRepository;
 
 @SpringBootTest
 class DbGrundlagenApplicationTests {

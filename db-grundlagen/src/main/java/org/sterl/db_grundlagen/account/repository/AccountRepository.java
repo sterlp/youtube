@@ -1,4 +1,4 @@
-package org.sterl.db_grundlagen.account;
+package org.sterl.db_grundlagen.account.repository;
 
 import java.util.Optional;
 
@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
+import org.sterl.db_grundlagen.account.model.AccountEntity;
 
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;

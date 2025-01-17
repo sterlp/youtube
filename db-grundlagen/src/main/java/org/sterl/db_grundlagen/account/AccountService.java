@@ -6,6 +6,11 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.sterl.db_grundlagen.account.component.AddMoneyComponent;
+import org.sterl.db_grundlagen.account.component.WithdrawMoneyComponent;
+import org.sterl.db_grundlagen.account.model.AccountEntity;
+import org.sterl.db_grundlagen.account.model.TransferMoneyCommand;
+import org.sterl.db_grundlagen.account.repository.AccountRepository;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -18,8 +23,12 @@ import lombok.RequiredArgsConstructor;
 public class AccountService {
 
     private final AccountRepository accountRepository;
+    private final AddMoneyComponent addMoney;
+    private final WithdrawMoneyComponent withdrawMoney;
     @PersistenceContext
     private final EntityManager entityManager;
+    
+    
 
     public List<AccountEntity> listAll() {
         return accountRepository.findAll();
@@ -32,6 +41,15 @@ public class AccountService {
     public Optional<AccountEntity> get(String id) {
         return accountRepository.findById(id);
     }
+    
+    
+    
+    public void transferMoney(TransferMoneyCommand command) {
+        addMoney.execute(command.to(), command.ammount());
+        withdrawMoney.execute(command.from(), command.ammount());
+    }
+    
+    
 
     public AccountEntity updateAccount(String id, int ammount) {
         /* same as but not quite due - different exception handling
@@ -45,7 +63,7 @@ public class AccountService {
         // ensure we hold the lock during the sleep, 
         // only required if the sleep around 250ms
         entityManager.flush(); 
-        sleep(500);
+        sleep(250);
 
         return result;
     }
@@ -56,5 +74,16 @@ public class AccountService {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public AccountEntity create(String account, int balance) {
+        if (accountRepository.existsById(account)) throw new IllegalStateException("Account already exists with id=" + account);
+        return accountRepository.save(new AccountEntity(account, balance));
+    }
+
+    public int getBalance(String account) {
+        var r = accountRepository.findById(account);
+        if (r.isEmpty()) throw new IllegalArgumentException("Account not found with id=" + account);
+        return r.get().getBalance();
     }
 }

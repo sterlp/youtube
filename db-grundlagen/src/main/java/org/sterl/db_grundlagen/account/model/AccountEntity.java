@@ -1,4 +1,4 @@
-package org.sterl.db_grundlagen.account;
+package org.sterl.db_grundlagen.account.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -20,8 +20,13 @@ public class AccountEntity {
     @Column(columnDefinition = "integer default 0")
     private int balance;
     
-    public int add(int ammount) {
+    public AccountEntity add(int ammount) {
         balance += ammount;
-        return balance;
+        return this;
+    }
+
+    public AccountEntity subtract(int ammount) {
+        balance -= ammount;
+        return this;
     }
 }
