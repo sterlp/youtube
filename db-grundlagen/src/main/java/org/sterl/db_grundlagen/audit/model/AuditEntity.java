@@ -1,4 +1,4 @@
-package org.sterl.db_grundlagen.transaction.model;
+package org.sterl.db_grundlagen.audit.model;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;

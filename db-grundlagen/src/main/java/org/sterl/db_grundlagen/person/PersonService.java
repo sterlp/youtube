@@ -1,9 +1,10 @@
-package org.sterl.db_grundlagen.transaction;
+package org.sterl.db_grundlagen.person;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.sterl.db_grundlagen.transaction.component.CreatePersonComponent;
-import org.sterl.db_grundlagen.transaction.model.PersonEntity;
+import org.sterl.db_grundlagen.audit.AuditService;
+import org.sterl.db_grundlagen.person.component.CreatePersonComponent;
+import org.sterl.db_grundlagen.person.model.PersonEntity;
 
 import lombok.RequiredArgsConstructor;
 

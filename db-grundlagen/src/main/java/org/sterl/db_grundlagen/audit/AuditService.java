@@ -1,16 +1,15 @@
-package org.sterl.db_grundlagen.transaction;
+package org.sterl.db_grundlagen.audit;
 
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.sterl.db_grundlagen.transaction.model.AuditEntity;
-import org.sterl.db_grundlagen.transaction.repository.AuditRepository;
+import org.sterl.db_grundlagen.audit.model.AuditEntity;
+import org.sterl.db_grundlagen.audit.repository.AuditRepository;
 
 import lombok.RequiredArgsConstructor;
 
 @Service
-@Transactional(propagation = Propagation.REQUIRES_NEW)
+@Transactional
 @RequiredArgsConstructor
 public class AuditService {
 
