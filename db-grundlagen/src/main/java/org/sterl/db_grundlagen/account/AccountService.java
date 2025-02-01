@@ -43,14 +43,12 @@ public class AccountService {
     }
     
     
-    
     public void transferMoney(TransferMoneyCommand command) {
-        addMoney.execute(command.to(), command.ammount());
         withdrawMoney.execute(command.from(), command.ammount());
+        addMoney.execute(command.to(), command.ammount());
     }
-    
-    
 
+    
     public AccountEntity updateAccount(String id, int ammount) {
         /* same as but not quite due - different exception handling
         var result = accountRepository.findLocked(id).get(); 

@@ -7,8 +7,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.sterl.db_grundlagen.HibernateAsserts;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.sterl.db_grundlagen.account.model.TransferMoneyCommand;
+import org.sterl.test.hibernate_asserts.HibernateAsserts;
+
+import jakarta.persistence.EntityManager;
 
 @SpringBootTest
 class BookMoneyTest {
@@ -18,6 +22,14 @@ class BookMoneyTest {
     @Autowired
     private HibernateAsserts hibernateAsserts;
     
+    @TestConfiguration
+    public static class Config {
+        @Bean
+        HibernateAsserts hibernateAsserts(EntityManager entityManager) {
+            return new HibernateAsserts(entityManager);
+        }
+    }
+    
     @Test
     void testTransferMoney() {
         // GIVEN
@@ -25,11 +37,9 @@ class BookMoneyTest {
         var to = subject.create(UUID.randomUUID().toString(), 0).getId();
         
         // WHEN
-        hibernateAsserts.reset();
         subject.transferMoney(new TransferMoneyCommand(from, to, 30));
-        
+
         // THEN
-        hibernateAsserts.assertTrxCount(1);
         assertThat(subject.getBalance(from)).isEqualTo(20);
         assertThat(subject.getBalance(to)).isEqualTo(30);
     }

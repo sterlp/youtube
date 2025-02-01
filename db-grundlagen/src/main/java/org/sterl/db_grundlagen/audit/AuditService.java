@@ -15,7 +15,7 @@ public class AuditService {
 
     private final AuditRepository auditRepository;
 
-    @Async
+    //@Async
     public void newAuditEvent(String name) {
         auditRepository.save(new AuditEntity(name));
     }
