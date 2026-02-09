@@ -416,4 +416,3 @@ void shouldFindPersonByEmail() {
 2. Service returns Entity, Resource converts
 3. Service starts TX (10s), Command participates (MANDATORY)
 4. Extract to Command: >10 lines, reused, testable
-
