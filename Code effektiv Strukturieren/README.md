@@ -5,7 +5,7 @@ https://youtu.be/luaDzMKyF0g
 
 # Domain Model & Architecture Rules
 
-This document defines the domain model conventions, component architecture, and development practices for this Spring Boot application.
+Domain conventions, component architecture, development practices.
 
 ## Table of Contents
 
@@ -20,23 +20,88 @@ This document defines the domain model conventions, component architecture, and 
 
 ## Component Architecture
 
-### TL;DR - Architecture Overview
+### TL;DR
 
-Each component is isolated in its own package. **Access to a component MUST go through its Service classes (public API).**
+Components isolated in packages. **Access ONLY through Service classes.**
 
-**Golden Rule:** Components are encapsulated. Access ONLY through Service classes.
+**Golden Rule:** Service = public API. Everything else = private.
 
 | Layer | Package | Suffix | Annotation | Access Rules |
 |-------|---------|--------|------------|------------|
-| Service | root package | `*Service` | `@Service` | Public API of component |
+| Service | root | `*Service` | `@Service` | Public API |
 | Command | `command` | `*Command` | `@Command` | Private, called by Service |
 | Repository | `repository` | `*Repository` | `@Repository` | Called by Service/Command in same module |
-| Entity | `model` | `*Entity` | `@Entity` | Shared between components (read-only) |
+| Entity | `model` | `*Entity` | `@Entity` | Shared across components (read-only) |
 | API Model | `api.<module>.model` | No suffix | - | External representation |
-| Resource | `api` | `*Resource` | `@RestController` | REST endpoints, no business logic |
-| Timer | root / `timer` | `*Timer` | `@Component` | Delegates to Service, no logic |
+| Resource | `api` | `*Resource` | `@RestController` | Delegates to Service, converts Entity↔API |
+| Timer | root / `timer` | `*Timer` | `@Component` | Delegates to Service |
 
-**Transaction Flow:** Service starts → Command participates (MANDATORY) → Repository operates in transaction
+**Flow:** Service starts → Command participates (TX) → Repository operates  
+**Conversion:** Service returns Entity → Resource converts → API model
+
+---
+
+## Custom Annotations
+
+### @Command
+
+```java
+@Transactional(propagation = Propagation.MANDATORY)
+@Component
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface Command {}
+```
+
+**Why MANDATORY?**  
+Command needs transaction from Service. Fails fast if called alone.
+Think: "private method" extracted from Service.
+
+---
+
+## Transaction Management
+
+### Service TX
+
+`@Transactional(timeout = 10_000)` - starts transaction, 10s timeout
+
+Use `@Transactional(readOnly = true)` for queries - Hibernate optimizes flush.
+
+```java
+@Service
+@Transactional(timeout = 10_000)  // writes
+public class PersonService { }
+
+@Service
+@Transactional(readOnly = true)   // reads
+public class PersonQueryService { }
+```
+
+### Command TX
+
+`MANDATORY` = needs existing transaction. Throws `TransactionRequiredException` if none.
+```java
+// ❌ This will FAIL at runtime
+@Component
+public class SomeInvalidCaller {
+    private final CreatePersonCommand command;
+    
+    public void doSomething() {
+        command.call("John", "Doe"); // TransactionRequiredException!
+    }
+}
+
+// ✅ Correct - called from Service with transaction
+@Service
+@Transactional(timeout = 10_000)
+public class PersonService {
+    private final CreatePersonCommand command;
+    
+    public PersonEntity createPerson(String firstName, String lastName) {
+        return command.call(firstName, lastName); // Works - transaction exists
+    }
+}
+```
 
 ---
 
@@ -66,68 +131,68 @@ All classes except Model/Entity classes and Converters are considered **private*
 
 ---
 
-### Service Classes (e.g., `PersonService`)
+### Service Classes
 
-**Location:** Root package of the component  
-**Annotation:** `@Service` + `@Transactional(timeout=10_000)`  
-**Responsibility:** High-level workflow orchestration - Public API of the component
+**Package:** root  
+**Annotation:** `@Service + @Transactional(timeout=10_000)`  
+**Role:** Public API, workflow orchestration
 
 **Characteristics:**
-- Implements "Workflow" and high-level logic
-- Manages cross-cutting concerns:
-  - Transaction management (via @Transactional)
-  - Authorization
-  - Caching
-  - Policies
-- Method names are **generic** (e.g., `savePerson()`, `findPerson()`)
-- Usually has NO private methods (delegate to Commands)
-- **May call:**
-  - Other Services (from other components)
-  - Commands in the same module
-  - Repositories in the same module
+- Workflow + high-level logic
+- Cross-cutting: TX, auth, caching, policies
+- Generic method names (`savePerson()`, `findPerson()`)
+- No private methods → extract to Command (except trivial helpers)
+- Returns Entities (not API models)
 
-**JavaDoc:** Each Service MUST have a short description stating its responsibility clearly.
+**May call:** Services (other components), Commands, Repositories  
+**JavaDoc:** Short responsibility statement required
 
 **Example:**
 ```java
-/**
- * Service für Verwaltung von Personen.
- * Verantwortlich für alle Person-bezogenen Workflows.
- */
 @Service
 @Transactional(timeout = 10_000)
 @RequiredArgsConstructor
 public class PersonService {
-    private final PersonRepository personRepository;
     private final CreatePersonCommand createPersonCommand;
     
-    public Person createPerson(String firstName, String lastName) {
+    public PersonEntity createPerson(String firstName, String lastName) {
         return createPersonCommand.call(firstName, lastName);
     }
 }
 ```
 
+**Direct Repository call** (simple ops):
+```java
+@Service
+@Transactional(timeout = 10_000)
+public class PersonService {
+    public PersonEntity findPerson(Long id) {
+        return personRepository.findById(id)
+            .orElseThrow(() -> new EntityNotFoundException("Person not found: " + id));
+    }
+}
+```
+
+**When to delegate vs inline:**
+- **Use Command:** Logic >10 lines, reused, needs testing, complex rules
+- **Inline:** Simple CRUD, single-line, no logic
+
 ---
 
-### Command Classes (e.g., `DeletePersonCommand`)
+### Command Classes
 
-**Location:** `command` sub-package  
-**Annotation:** `@Command` (internally: `@Component` + `@Transactional(propagation=MANDATORY)`)  
-**Responsibility:** Implements a single use-case or low-level logic step  
-**Naming:** Named after the use-case with "Command" suffix (e.g., `DeletePersonCommand`, `ValidateEmailCommand`)
+**Package:** `command`  
+**Annotation:** `@Command` = `@Component + MANDATORY TX`  
+**Role:** Single use-case, low-level logic
 
 **Characteristics:**
-- Usually has ONE main method: `call()`
-- Method names can be **specific** (e.g., `call()`, `validateEmailFormat()`)
-- Like a "private method" extracted from Service
-- Must be testable in isolation
-- Runs in MANDATORY transaction (requires existing transaction from Service)
-- **May call:**
-  - Other Commands in the same module
-  - Foreign Services (for cross-module dependencies)
-- **May NOT:**
-  - Call its own Service (no upward delegation)
-  - Call foreign Repositories directly
+- ONE method: `call()`
+- Specific method names OK (`validateEmailFormat()`)
+- Testable in isolation
+- Needs existing TX from Service
+
+**May call:** Commands (same module), Services (other components)  
+**May NOT:** Own Service (no upward), foreign Repositories
 
 **Example:**
 ```java
@@ -146,13 +211,11 @@ public class DeletePersonCommand {
 
 ---
 
-### Timer Classes (e.g., `PersonCleanupTimer`)
+### Timer Classes
 
-**Location:** Root package (with Service) or `timer` sub-package  
-**Responsibility:** Scheduled tasks - delegates to Service  
-**Annotation:** `@Scheduled`
-
-**Rule:** Timer has NO business logic except logging. All logic MUST be in Service or Command.
+**Package:** root or `timer`  
+**Annotation:** `@Scheduled`  
+**Rule:** No logic, only logging. Delegate to Service.
 
 **Example:**
 ```java
@@ -162,11 +225,11 @@ public class DeletePersonCommand {
 public class PersonCleanupTimer {
     private final PersonService personService;
     
-    @Scheduled(cron = "0 0 2 * * ?") // Daily at 2 AM
+    @Scheduled(cron = "0 0 2 * * ?\")  // 2 AM daily
     public void cleanupInactivePersons() {
-        log.info("Starting person cleanup timer");
+        log.info("Starting cleanup");
         personService.deleteInactivePersons();
-        log.info("Person cleanup timer completed");
+        log.info("Cleanup done");
     }
 }
 ```
@@ -177,20 +240,16 @@ public class PersonCleanupTimer {
 
 ### Entities
 
-**Location:** `model` package  
-**Naming:** Suffix with `*Entity` (e.g., `PersonEntity`, `OrderEntity`)  
-**Rationale:** Avoids name collision with API classes (which have no suffix)
+**Package:** `model`  
+**Naming:** `*Entity` suffix (avoids collision with API classes)
 
 ```java
-package de.netze.utilities.sap.us4g_adapter.model;
-
 @Entity
 @Table(name = "person")
 public class PersonEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    // ...
 }
 ```
 
@@ -198,134 +257,116 @@ public class PersonEntity {
 
 ## Database Conventions
 
-- **Table Names:** Lowercase for maximum DBMS compatibility (`person`, `order_item`)
-- **Index Names:** Lowercase (`idx_person_email`)
-- **Column Names:** Lowercase, snake_case for multi-word columns
-- **Test Database:** H2 in-memory database
-- **Hibernate Strategy:** `spring.jpa.hibernate.ddl-auto=create-drop` (for development/testing)
+- **Tables:** Lowercase (`person`, `order_item`)
+- **Indexes:** Lowercase (`idx_person_email`)
+- **Columns:** Lowercase, snake_case
+- **Test DB:** H2 in-memory
+- **Hibernate:** `create-drop` (dev/test)
 
 ---
 
 ## Repositories
 
-**Location:** `repository` package  
-**Naming:** Suffix with `*Repository` (e.g., `PersonRepository`)  
-**Access Control:** May ONLY be called by:
-- Services in the same module
-- Commands in the same module
+**Package:** `repository`  
+**Access:** Service/Command in same module only
 
-**Example:**
 ```java
-package de.netze.utilities.sap.us4g_adapter.person.repository;
-
 @Repository
 public interface PersonRepository extends JpaRepository<PersonEntity, Long> {
     List<PersonEntity> findByLastName(String lastName);
 }
 ```
 
-**Rule:** Repositories implement the "Persistence" layer - abstraction of database queries.
+Role: Persistence abstraction
 
 ---
 
 ## API Layer
 
-### API Model Classes
+### API Models
 
-**Location:** `api.<module>.model` package  
-**Naming:** NO suffix (e.g., `Person`, `Order`)  
-**Purpose:** External representation for REST APIs
+**Package:** `api.<module>.model`  
+**Naming:** NO suffix  
+**Purpose:** External REST representation
 
 ```java
-package de.netze.utilities.sap.us4g_adapter.person.api.model;
-
 public class Person {
     private Long id;
     private String firstName;
     private String lastName;
-    // ...
 }
 ```
 
 ### Entity → API Conversion
 
-**Approach 1: Converter (Preferred for complex mappings)**
-- Use Spring `Converter<S, T>` interface
-- Location: `api.<module>.converter` package or directly in `api`together with the resource
-- Converts `*Entity` → API class
+**Option 1: Converter** (complex mappings)
 
 ```java
 @Component
 public class PersonEntityToPersonConverter implements Converter<PersonEntity, Person> {
-    @Override
     public Person convert(PersonEntity entity) {
-        Person person = new Person();
-        person.setId(entity.getId());
-        person.setFirstName(entity.getFirstName());
-        // ...
-        return person;
+        return new Person(entity.getId(), entity.getFirstName(), entity.getLastName());
     }
 }
 ```
 
-**Approach 2: Repository Projections**
-- Use Spring Data projections (interface-based)
-- Only when direct mapping is sufficient
+**Location:**
+- `api/converter/` - reused by multiple Resources
+- `api/` - single Resource only
+- Never in Service/Command
+
+**Option 2: Projections** (simple mappings)
+
+Spring Data interface projections - when 1:1 mapping.
 
 ### REST Resources
 
-**Location:** `api` package  
-**Naming:** Suffix with `*Resource` (e.g., `PersonResource`)  
-**Purpose:** Anti-corruption layer - implements public REST API
-**Responsibility:** Delegates to Service, NO business logic
+**Package:** `api`  
+**Naming:** `*Resource` suffix  
+**Role:** Anti-corruption layer - public REST API  
+**Responsibility:** Delegate to Service, convert Entity↔API, no logic
 
 ```java
 @RestController
 @RequestMapping("/api/persons")
+@RequiredArgsConstructor
 public class PersonResource {
     private final PersonService personService;
+    private final Converter<PersonEntity, Person> entityToApiConverter;
     
     @GetMapping("/{id}")
     public Person getPerson(@PathVariable Long id) {
-        return personService.findPerson(id); // Service returns API class
+        PersonEntity entity = personService.findPerson(id); // Service returns Entity
+        return entityToApiConverter.convert(entity); // Resource converts to API
     }
 }
 ```
 
 ---
 
-## General Development Rules
+## General Rules
 
-### Code Quality
+- Clean Code + SOLID where useful
+- **>4 params:** Use Value/Entity class
+- **REST:** Zalando API Guidelines
+- **Pre-commit:** `mvn clean install`
 
-- **Clean Code principles** apply
-- **Uncle Bob's SOLID principles** should be considered where useful
-- **4+ Parameters Rule:** If a method has more than 4 parameters, consider a Value/Entity class
-- **Zalando REST API Guidelines** apply for all REST endpoints
-- **Pre-Commit:** Run `mvn clean install` before every commit / end of work
-
-### Method Complexity
-
-If a method exceeds 4 parameters:
 ```java
-// ❌ Avoid
-public void createPerson(String firstName, String lastName, String email, String phone, String address);
+// ❌
+public void create(String a, String b, String c, String d, String e);
 
-// ✅ Better
-public void createPerson(PersonData personData);
+// ✅
+public void create(PersonData data);
 ```
 
 ---
 
-## Testing Guidelines
+## Testing
 
-### Test Structure
+One test class per production class.
 
-Each major functionality should be tested. One test class per production class.
-
-**Test Subject:** Use a variable named `subject` to make clear which component is being tested.
-
-**Test Pattern:** Structure EVERY test with GIVEN/WHEN/THEN comments:
+**Subject:** Variable named `subject`  
+**Pattern:** GIVEN/WHEN/THEN comments
 
 ```java
 @Test
@@ -344,11 +385,7 @@ void shouldCreatePersonSuccessfully() {
 }
 ```
 
-### Random Test Data
-
-Tests should work with **random data** where possible, so explicit cleanup (`@BeforeEach` clear) is generally not required.
-
-**Example:**
+**Random data:** No `@BeforeEach` cleanup needed
 ```java
 @Test
 void shouldFindPersonByEmail() {
@@ -366,46 +403,17 @@ void shouldFindPersonByEmail() {
 }
 ```
 
-### Test Database
-
-- Use H2 in-memory database for tests
-- Configure in `src/test/resources/application.yml`:
-  ```yaml
-  spring:
-    datasource:
-      url: jdbc:h2:mem:testdb
-      driver-class-name: org.h2.Driver
-    jpa:
-      hibernate:
-        ddl-auto: create-drop
-      show-sql: true
-  ```
+**Test DB:** H2 in-memory (`testdb`)
 
 ---
 
 ## Summary
 
-See [Component Architecture Overview](#component-architecture) for the complete architecture table.
+[Component Architecture](#component-architecture) - full table
 
-### Custom Annotations
+**Key Decisions:**
+1. `@Service + @Transactional(timeout=10_000)` - explicit
+2. Service returns Entity, Resource converts
+3. Service starts TX (10s), Command participates (MANDATORY)
+4. Extract to Command: >10 lines, reused, testable
 
-**@Command**
-```java
-@Transactional(propagation = Propagation.MANDATORY)
-@Component
-@Target(ElementType.TYPE)
-@Retention(RetentionPolicy.RUNTIME)
-public @interface Command {}
-```
-Combines `@Component` with MANDATORY transaction propagation (requires existing transaction).
-
-**Alternative: @Service**  
-If you prefer a custom annotation instead of plain `@Service + @Transactional`, you can use:
-```java
-@Transactional(timeout = 10_000)
-@Service
-@Target(ElementType.TYPE)
-@Retention(RetentionPolicy.RUNTIME)
-public @interface Service {}
-```
-Combines `@Service` with transaction management (10-second timeout).
